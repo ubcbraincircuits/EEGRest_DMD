@@ -178,10 +178,10 @@ Xdmd = Phi * time_dynamics;
 reconError(1) = immse(X, Xdmd);
 
 X = revTimeShiftEmbedding(X, nstacks);
-Xdmd2 = revTimeShiftEmbedding(real(Xdmd), nstacks);
+Xdmd = revTimeShiftEmbedding(real(Xdmd), nstacks);
 
-reconError(2) = immse(X, Xdmd2);
-reconError(3) = immse(X(:,nstacks+1:end), Xdmd2(:,nstacks+1:end));
+reconError(2) = immse(X, Xdmd);
+reconError(3) = immse(X(:,nstacks+1:end), Xdmd(:,nstacks+1:end));
 
 end
 
