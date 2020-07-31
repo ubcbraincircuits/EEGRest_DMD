@@ -92,13 +92,13 @@ end
 
 fig = figure;
 subplot(1,2,1);
-heatmap(r_vals, nstacks, nanmedian(reconErrorTrain,3));
+heatmap(r_vals, nstacks, nanmedian(reconErrorTrain(:,:,:,1),3));
 colormap hot;
 xlabel('r - no. of dimensions');
 ylabel('nstacks');
 title('Training Error');
 subplot(1,2,2);
-heatmap(r_vals, nstacks, nanmedian(reconErrorTest,3));
+heatmap(r_vals, nstacks, nanmedian(reconErrorTest(:,:,:,1),3));
 colormap hot;
 xlabel('r - no. of dimensions');
 ylabel('nstacks');
