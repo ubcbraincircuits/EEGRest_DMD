@@ -12,22 +12,37 @@ dt = 1/fs;
 
 GoalDataset = eval(GoalDatasetName);
 [pt_no, epochs_no] = size(GoalDataset);
-% r_vals = 50:50:100; nstacks = 50:50:150;
-r_vals = 100; nstacks = 150;
+% r_vals = 100; nstacks = 150;
+% r_vals_cell = {25:25:50,50:50:100,100:100:200}; 
+% nstacks_cell = {25:25:75, 50:50:150, 100:100:300};
+r_vals_cell = {50}; 
+nstacks_cell = {150};
 
-reEpoch = 250;
-nPl = 4;
+nPl = 1;
+% reEpoch = [125, 250, 500];
+reEpoch = [250];
 
 for pt = 1 : 1 %patients
+
+for re = 1:length(reEpoch)
+
+    r_vals = r_vals_cell{re};
+    nstacks = nstacks_cell{re};
     
-    data = cat(3,GoalDataset{pt,:});
-    data = zscore(data);
-    data = permute(data,[2,1,3]);
-    data = reshape(data, [size(data,1), reEpoch, size(data,3)*size(data,2)/reEpoch]);
+    data = cat(1,GoalDataset{pt,:}); % data = 30000 x 27
+    nCh = size(GoalDataset{pt,1}, 2);
+    nSamples = size(GoalDataset{pt,1},1);
+    nTrials = length(GoalDataset(pt,:));
+    
+    data = whiten(data);
+    data = reshape(data, [nSamples, nTrials, nCh]); % data = 500 x 60 x 27
+    
+    data = permute(data,[3,1,2]);
+    data = reshape(data, [nCh, reEpoch(re), nTrials*nSamples/reEpoch(re)]);
     
     nepoch = size(data,3);
-    reconErrorTrain = NaN(length(nstacks), length(r_vals), nepoch, 3);
-    reconErrorTest = NaN(length(nstacks), length(r_vals), nepoch, 3);
+    reconErrorTrain = NaN(length(nstacks), length(r_vals), nepoch, length(reEpoch), 3);
+    reconErrorTest = NaN(length(nstacks), length(r_vals), nepoch, length(reEpoch), 3);
     
     %     for k = 1:nepoch
     for k = [30, 60, 90, 120]
@@ -69,40 +84,25 @@ for pt = 1 : 1 %patients
                 for ii = 1:size(Xaug,3)
                     [Xdmd_train(:,:,ii), tempErr(:,ii)] = predictDMD(DmdStruct, Xaug(:,:,ii), nstacks(n));
                 end
-                reconErrorTrain(n, r, k, :) = nanmean(tempErr,2);
+                reconErrorTrain(n, r, k, re, :) = nanmean(tempErr,2);
                 
                 tempErr = NaN(3,size(Xaug_test,3));
                 for ii = 1:size(Xaug_test,3)
                     [Xdmd_test(:,:,ii), tempErr(:,ii)] = predictDMD(DmdStruct, Xaug_test(:,:,ii), nstacks(n));
                 end
-                reconErrorTest(n, r, k, :) = nanmean(tempErr,2);
+                reconErrorTest(n, r, k, re, :) = nanmean(tempErr,2);
                 
                 plotTrainTest(reshape(Xaug(:,:,k-nPl:k-1), size(Xaug,1), []), reshape(Xaug_test, size(Xaug,1), []),...
                     reshape(Xdmd_train(:,:,k-nPl:k-1), size(Xdmd_train,1), []), reshape(Xdmd_test, size(Xdmd_test,1), []), fs,...
-                    pt,k,nstacks(n),r_vals(r),reconErrorTrain(n, r, k, 1),...
-                    reconErrorTest(n, r, k, 1),plot_path);
+                    pt,k,nstacks(n),r_vals(r),reconErrorTrain(n, r, k, re, 2:3),...
+                    reconErrorTest(n, r, k, re, 2:3),plot_path);
                 
             end
         end
     end
-    save(sprintf('Error_2020_07_21_Test_Epoch_0.5_Sub%d.mat',pt),'reconErrorTest', 'reconErrorTrain');
 end
-
-%% Plot
-
-fig = figure;
-subplot(1,2,1);
-heatmap(r_vals, nstacks, nanmedian(reconErrorTrain,3));
-colormap hot;
-xlabel('r - no. of dimensions');
-ylabel('nstacks');
-title('Training Error');
-subplot(1,2,2);
-heatmap(r_vals, nstacks, nanmedian(reconErrorTest,3));
-colormap hot;
-xlabel('r - no. of dimensions');
-ylabel('nstacks');
-title('Test Error');
+% save(sprintf('Error_2020_08_06_Test_Epoch_0.25_0.5_1_Sub%d.mat',pt),'reconErrorTest', 'reconErrorTrain');
+end
 
 %% Functions
 
@@ -175,13 +175,13 @@ end
 
 Xdmd = Phi * time_dynamics;
 
-reconError(1) = immse(X, Xdmd);
+reconError(1) = immse(X, real(Xdmd));
 
 X = revTimeShiftEmbedding(X, nstacks);
-Xdmd = revTimeShiftEmbedding(real(Xdmd), nstacks);
+Xdmd2 = revTimeShiftEmbedding(real(Xdmd), nstacks);
 
-reconError(2) = immse(X, Xdmd);
-reconError(3) = immse(X(:,nstacks+1:end), Xdmd(:,nstacks+1:end));
+reconError(2) = immse(X, Xdmd2);
+reconError(3) = immse(X(:,nstacks+1:end), Xdmd2(:,nstacks+1:end));
 
 end
 
@@ -196,13 +196,14 @@ subplot(3,1,3), plot(u1(:,1:n),'Linewidth',2); title("U basis");
 end
 
 
-function [] = plotCompare(X, Xdmd, chs, rows, cols, fs)
+function [] = plotCompare(X, Xdmd, chs, rows, cols, fs, nstacks)
 
 for ch = chs
     subplot(rows, cols, ch);
     t = (1:size(X,2))/fs;
     plot(t, X(ch,:)); hold on;
     plot(t, Xdmd(ch,:));
+    vline(nstacks/fs);
     if ch == 1
         legend("X", "Xdmd");
     end
@@ -215,19 +216,23 @@ function [] = plotTrainTest(X, X_test, Xdmd, Xdmd_test, fs, pt,ep,nstacks,r,reco
 
 X = revTimeShiftEmbedding(X, nstacks);
 X_test = revTimeShiftEmbedding(X_test, nstacks);
-Xdmd = revTimeShiftEmbedding(real(Xdmd), nstacks);
-Xdmd_test = revTimeShiftEmbedding(real(Xdmd_test), nstacks);
+Xdmd = revTimeShiftEmbedding(real(Xdmd),nstacks);
+Xdmd_test = revTimeShiftEmbedding(real(Xdmd_test),nstacks);
 
 fig = figure;
 set(fig, 'Position', [0 0 720 720]);
-plotCompare(X, real(Xdmd), 1:27, 9, 3, fs)
-suptitle(sprintf('Sub No: %d, Epoch No: %d, nstacks = %d, r = %d, Training Error = %.2f',pt,ep,nstacks,r,reconErrorTrain));
+plotCompare(X, real(Xdmd), 1:27, 9, 3, fs, nstacks)
+disp(immse(X, real(Xdmd)));
+disp(immse(X(:,end-100:end), real(Xdmd(:,end-100:end))));
+suptitle(sprintf('Sub No: %d, Epoch No: %d, nstacks = %d, r = %d \n Training Error(entire epoch) = %.2f, Training Error(last 200ms) = %.2f',pt,ep,nstacks,r,reconErrorTrain(1),reconErrorTrain(2)));
 saveas(fig, fullfile(plot_path,sprintf('ReconErrorTrain_CV_Sub%d_Epoch%d_nstacks%d_r%d.png',pt,ep,nstacks,r)));
 
 fig = figure;
 set(fig, 'Position', [0 0 720 720]);
-plotCompare(X_test, real(Xdmd_test), 1:27, 9, 3, fs)
-suptitle(sprintf('Sub No: %d, Epoch No: %d, nstacks = %d, r = %d, Test Error = %.2f',pt,ep,nstacks,r,reconErrorTest));
-saveas(fig, fullfile(plot_path,sprintf('ReconErrorTest_CV_Sub%d_Epoch%d_nstacks%d_r%d.png',pt,ep,nstacks,r)));
+plotCompare(X_test, real(Xdmd_test), 1:27, 9, 3, fs, nstacks)
+disp(immse(X_test, real(Xdmd_test)));
+disp(immse(X_test(:,end-100:end), real(Xdmd_test(:,end-100:end))));
+suptitle(sprintf('Sub No: %d, Epoch No: %d, nstacks = %d, r = %d \n Test Error(entire epoch) = %.2f, Test Error(last 200ms) = %.2f',pt,ep,nstacks,r,reconErrorTest(1),reconErrorTest(2)));
+saveas(fig, fullfile(plot_path,sprintf('ReconErrorTest_CV_Sub%d_Epoch%d_nstacks%d_r%d.fig',pt,ep,nstacks,r)));
 
 end
