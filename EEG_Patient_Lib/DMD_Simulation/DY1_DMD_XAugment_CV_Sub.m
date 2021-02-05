@@ -8,7 +8,7 @@ for main_loop = 1:length(Type)
     clearvars -except Type main_loop;
     
     GoalDatasetName = Type{main_loop};
-    data_path = 'READY4DL_500.mat';
+    data_path = '/Users/abhijitc/Documents/Abhijit/NeuroData_Tutor/EEG_patient_id/READY4DL_500.mat';
     
     load(data_path, GoalDatasetName);
     rng('default');
